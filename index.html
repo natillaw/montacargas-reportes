@@ -53,7 +53,7 @@ nav{display:flex;gap:6px;max-width:560px;margin:0 auto;padding:12px 12px 0}nav b
 <div id='pend'></div>
 <section>
 <h2>Cliente</h2>
-<label for="cli">Tienda</label>
+<label for="cli">Tienda donde está</label>
 <select id="cli"></select>
 <div class="row">
 <div><label for="fec">Fecha</label><input id="fec" type="date"></div>
@@ -63,14 +63,14 @@ nav{display:flex;gap:6px;max-width:560px;margin:0 auto;padding:12px 12px 0}nav b
 
 <section>
 <h2>Montacargas</h2>
+<label style='display:flex;gap:8px;align-items:center;color:var(--ink)'><input id='pre' type='checkbox' style='width:auto'>Máquina prestada de otra tienda</label>
+<div id='orw' hidden><label for='orc'>Tienda de origen de la máquina</label><select id='orc'></select></div>
 <div class="row">
-<div><label for="mod">Marca / modelo</label><input id="mod" placeholder="Ej. Toyota 8FGU25"></div>
+<div><label for="mar">Marca</label><select id="mar"><option>Yale</option><option>Hyster</option><option>TCM</option><option>FCM</option><option>Doosan</option><option value="otra">Otra (escribir cuál)</option></select></div>
 <div><label for="uni">Letra de máquina</label><select id="uni"><option value="">Única</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
 </div>
-<div class="row">
-<div><label for="hor">Horómetro (h)</label><input id="hor" inputmode="numeric" placeholder="0"></div>
-<div><label for="com">Combustible</label><select id="com"><option>Gas LP</option><option>Eléctrico</option><option>Diésel</option></select></div>
-</div>
+<input id="mod" placeholder="¿Cuál marca?" hidden style="margin-top:8px">
+<label for="com">Combustible</label><select id="com"><option>Gas</option><option>Gas y gasolina</option><option>Gasolina</option><option>Diésel</option></select>
 <label>Tipo de servicio</label>
 <div class="seg" id="tipo"><button type="button" class="on">Revisión</button><button type="button">Reparación</button><button type="button">Mantenimiento</button></div>
 </section>
@@ -78,17 +78,15 @@ nav{display:flex;gap:6px;max-width:560px;margin:0 auto;padding:12px 12px 0}nav b
 <section>
 <h2>Revisión rápida</h2>
 <div class="chk" id="chk"></div>
-<p class="note">Toca para cambiar: OK, Atención, Falla, No aplica.</p>
+<p class="note">Toca para marcar: OK, Atención, Falla. Sin marcar no se incluye en el reporte.</p>
 </section>
 
 <section>
 <h2>Trabajo</h2>
 <label for="fal">Falla reportada</label><textarea id="fal"></textarea>
 <label for="tra">Trabajo realizado</label><textarea id="tra"></textarea>
-<label for="ref">Refacciones usadas</label><textarea id="ref" placeholder="Una por línea"></textarea>
 <label>Estado final</label>
 <div class="seg" id="est"><button type="button" class="on">Operativo</button><button type="button">Con observaciones</button><button type="button">Fuera de servicio</button></div>
-<label for="prox">Próxima revisión</label><input id="prox" type="date">
 <label for="obs">Observaciones</label><textarea id="obs"></textarea>
 </section>
 
@@ -128,13 +126,13 @@ nav{display:flex;gap:6px;max-width:560px;margin:0 auto;padding:12px 12px 0}nav b
 const $=id=>document.getElementById(id);
 const items=["Frenos","Llantas","Horquillas","Mástil y cadenas","Hidráulico","Batería / motor","Luces y claxon","Dirección"];
 const st=[["✅","OK"],["⚠️","Atención"],["❌","Falla"],["➖","N/A"]];
-const state=items.map(()=>0);
-function drawChk(){$("chk").innerHTML="";items.forEach((n,i)=>{const b=document.createElement("button");b.type="button";b.className="s"+state[i];b.innerHTML="<span>"+n+"</span><span>"+st[state[i]][0]+"</span>";b.onclick=()=>{state[i]=(state[i]+1)%4;drawChk();build()};$("chk").appendChild(b)})}
+const state=items.map(()=>-1);
+function drawChk(){$("chk").innerHTML="";items.forEach((n,i)=>{const b=document.createElement("button");b.type="button";b.className="s"+(state[i]<0?3:state[i]);b.innerHTML="<span>"+n+"</span><span>"+(state[i]<0?"⚪":st[state[i]][0])+"</span>";b.onclick=()=>{state[i]=state[i]>=2?-1:state[i]+1;drawChk();build()};$("chk").appendChild(b)})}
 function seg(id){$(id).onclick=e=>{if(e.target.tagName!=="BUTTON")return;[...$(id).children].forEach(b=>b.classList.remove("on"));e.target.classList.add("on");build()}}
 const val=id=>[...$(id).children].find(b=>b.classList.contains("on")).textContent;
 const fmt=d=>d?d.split("-").reverse().join("/"):"";
 function build(){
-const [code,name]=$("cli").value.split("|");
+const [code,name]=$("cli").value.split("|"),U=UN();
 const L=[];
 L.push("*REPORTE DE SERVICIO*");
 L.push("🏬 "+name+" ("+code+")");
@@ -142,26 +140,24 @@ if($("fec").value)L.push("📅 "+fmt($("fec").value));
 if($("con").value)L.push("👤 Atendió: "+$("con").value);
 L.push("");
 L.push("🚜 *Montacargas*");
-L.push([$("mod").value,"Unidad "+code+$("uni").value,$("com").value,$("hor").value&&$("hor").value+" h"].filter(Boolean).join(" | "));
+L.push([marca(),"Unidad "+U.u+(U.p?" (préstamo en "+code+")":""),$("com").value].filter(Boolean).join(" | "));
 L.push("🔧 Servicio: "+val("tipo"));
 L.push("");
-L.push("*Revisión*");
-items.forEach((n,i)=>L.push(st[state[i]][0]+" "+n));
+if(state.some(x=>x>=0))L.push("*Revisión*");
+items.forEach((n,i)=>{if(state[i]>=0)L.push(st[state[i]][0]+" "+n)});
 if($("fal").value)L.push("","*Falla reportada*",$("fal").value);
 if($("tra").value)L.push("","*Trabajo realizado*",$("tra").value);
-if($("ref").value)L.push("","*Refacciones*",...$("ref").value.split("\n").filter(Boolean).map(x=>"• "+x));
 L.push("","*Estado final:* "+val("est"));
-if($("prox").value)L.push("📌 Próxima revisión: "+fmt($("prox").value));
 if($("obs").value)L.push("","*Observaciones*",$("obs").value);
 const t=L.join("\n");$("out").textContent=t;showPend();
 
 return t}
 $("fec").valueAsDate=new Date();
-const T="N01|Calidonia,N02|Los Ángeles,N03|Costa del Este,N04|Albrook,N05|Brisas del Golf,N06|Paitilla,N07|Colón,N08|David,N09|Chorrera,N10|Centenario,N11|Versalles,N12|Coronado,N13|Arraiján,N14|Calle 50,N15|Chitré,N16|Penonomé,N17|F. Sur,N18|Playa Blanca,N19|Santiago,N20|La Doña,N21|Parque Lefevre,N22|Panamá Pacífico,N23|Obarrio,N24|Costa Verde,N25|Plaza Las Américas,C01|Av. Balboa,C02|Vía España,C03|Pedregal,C04|Vista Alegre,C05|Villa Lucre,C06|David,C07|Colón,C08|Tumba Muerto,C09|24 de Diciembre,C10|Chanis,C11|San Miguelito,C12|Coronado,C13|Chitré,C14|Penonomé,C15|Santiago,C16|Brisas del Golf,C17|Bugaba,C18|Las Tablas,C19|Costa Verde,C20|La Rivera,C21|La Siesta".split(",");
+const T="D01|Corredor Sur,N01|Calidonia,N02|Los Ángeles,N03|Costa del Este,N04|Albrook,N05|Brisas del Golf,N06|Paitilla,N07|Colón,N08|David,N09|Chorrera,N10|Centenario,N11|Versalles,N12|Coronado,N13|Arraiján,N14|Calle 50,N15|Chitré,N16|Penonomé,N17|F. Sur,N18|Playa Blanca,N19|Santiago,N20|La Doña,N21|Parque Lefevre,N22|Panamá Pacífico,N23|Obarrio,N24|Costa Verde,N25|Plaza Las Américas,C01|Av. Balboa,C02|Vía España,C03|Pedregal,C04|Vista Alegre,C05|Villa Lucre,C06|David,C07|Colón,C08|Tumba Muerto,C09|24 de Diciembre,C10|Chanis,C11|San Miguelito,C12|Coronado,C13|Chitré,C14|Penonomé,C15|Santiago,C16|Brisas del Golf,C17|Bugaba,C18|Las Tablas,C19|Costa Verde,C20|La Rivera,C21|La Siesta".split(",");
 $("cli").innerHTML=T.map(x=>"<option value='"+x+"'>"+x.replace("|"," – ")+"</option>").join("");
 function hist(){try{return JSON.parse(localStorage.getItem("rep_hist")||"[]")}catch(e){return[]}}
 function drawHist(){$("hist").innerHTML=hist().slice(0,6).map(r=>"<div style='padding:6px 0;border-bottom:1px solid var(--line)'><b>"+r.u+"</b> · "+fmt(r.d)+" · "+r.t+" · "+r.e+"</div>").join("")||"<p class='note'>Aún no hay reportes guardados en este teléfono.</p>"}
-function save(){const[c,sn]=$('cli').value.split('|'),u=c+$('uni').value,r={id:Date.now(),u,sn,d:$('fec').value,e:val('est'),t:val('tipo'),fa:$('fal').value,tr:$('tra').value,rf:$('ref').value,ob:$('obs').value,ck:items.map((n,i)=>n+': '+st[state[i]][1]).join('; '),m:build()};const h=hist();h.unshift(r);try{localStorage.setItem('rep_hist',JSON.stringify(h.slice(0,500)))}catch(e){}hubFromReport(u);drawHist();showPend();push({type:'report',r})}
+function save(){const[c,sn]=$('cli').value.split('|'),u=UN().u,r={id:Date.now(),u,sn,d:$('fec').value,e:val('est'),t:val('tipo'),fa:$('fal').value,tr:$('tra').value,ob:$('obs').value,ck:items.map((n,i)=>state[i]>=0?n+': '+st[state[i]][1]:'').filter(Boolean).join('; '),m:build()};const h=hist();h.unshift(r);try{localStorage.setItem('rep_hist',JSON.stringify(h.slice(0,500)))}catch(e){}hubFromReport(u);drawHist();showPend();push({type:'report',r})}
 document.querySelectorAll("input,select,textarea").forEach(e=>e.addEventListener("input",build));
 const nz=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const TN=T.map(x=>{const[c,n]=x.split('|');return{c,n,k:nz(n).replace(/^av\. /,'')}});
@@ -171,13 +167,13 @@ const CO={'Operativa':'var(--ok)','En proceso':'var(--warn)','Esperando refacci�
 const hoy=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
 function H(){try{return JSON.parse(localStorage.getItem('rep_hub'))||{tasks:[],mach:{}}}catch(e){return{tasks:[],mach:{}}}}
 function SH(x){try{localStorage.setItem('rep_hub',JSON.stringify(x))}catch(e){}qhub()}
-function hubFromReport(u){const c=u.slice(0,3),x=H(),e=val('est');
-if($('cerrar')&&$('cerrar').checked)x.tasks.forEach(t=>{if(!t.x&&(t.u===u||t.u===c))t.x=1});
-x.mach[u]={e:e==='Operativo'?'Operativa':e==='Fuera de servicio'?'Fuera de servicio':'En proceso',d:$('fec').value,t:val('tipo')};
+function hubFromReport(u){const c=u.slice(0,3),x=H(),e=val('est'),U=UN();
+if($('cerrar')&&$('cerrar').checked)x.tasks.forEach(t=>{if(!t.x&&(t.u===u||t.u===c||t.u===U.loc))t.x=1});
+x.mach[u]={e:e==='Operativo'?'Operativa':e==='Fuera de servicio'?'Fuera de servicio':'En proceso',d:$('fec').value,t:val('tipo'),l:U.p?U.loc:''};
 const bad=items.filter((n,i)=>state[i]===1||state[i]===2),p=[];
 if(e!=='Operativo')p.push(e);if(bad.length)p.push('Revisar: '+bad.join(', '));if($('obs').value)p.push($('obs').value);
 if(p.length)x.tasks.push({id:Date.now(),u,t:p.join('. '),d:$('fec').value,s:'reporte'});SH(x)}
-function showPend(){const u=$('cli').value.split('|')[0]+$('uni').value,c=u.slice(0,3),p=H().tasks.filter(t=>!t.x&&(t.u===u||t.u===c)),k=u+p.length,el=$('pend');
+function showPend(){const U=UN(),u=U.u,c=U.c,p=H().tasks.filter(t=>!t.x&&(t.u===u||t.u===c||t.u===U.loc)),k=u+U.loc+p.length,el=$('pend');
 if(el.dataset.k===k)return;el.dataset.k=k;
 el.innerHTML=p.length?`<section><h2>Pendientes de ${u}</h2>${p.map(t=>`<div class='tk'>• ${esc(t.t)} <span class='note'>${fmt(t.d)}</span></div>`).join('')}<label style='display:flex;gap:8px;align-items:center;color:var(--ink)'><input id='cerrar' type='checkbox' style='width:auto'>Marcar como resueltos al enviar</label></section>`:''}
 function parseAviso(txt){const out=[];let hint='',cur=null,pre=[];
@@ -185,7 +181,7 @@ txt.split('\n').forEach(raw=>{
 let l=raw.replace(/^\[[^\]]*\]\s*[^:]*:\s*/,'').replace(/\burgente\b/gi,'').trim();
 if(!l||/^(gracias|ok|listo|dale|buenas?|buenos|si)\W*$/.test(nz(l))||/omitid|multimedia/.test(nz(l)))return;
 const n=nz(l);if(n.includes('cochez'))hint='C';else if(n.includes('novey'))hint='N';
-let c='',amb=false,i=-1,len=0;const m=n.match(/\b([cn])\s?0?(\d{1,2})\b/);
+let c='',amb=false,i=-1,len=0;const m=n.match(/\b([cnd])\s?0?(\d{1,2})\b/);
 if(m){const k=m[1].toUpperCase()+m[2].padStart(2,'0');if(TN.some(t=>t.c===k)){c=k;i=m.index;len=m[0].length}}
 if(!c){let b=[],bl=0;TN.forEach(t=>{if(n.includes(t.k)){if(t.k.length>bl){bl=t.k.length;b=[t]}else if(t.k.length===bl)b.push(t)}});
 if(b.length){const h=b.filter(t=>t.c[0]===hint),p=h.length?h:b;amb=p.length>1;c=(p.find(t=>t.c[0]==='C')||p[0]).c;i=n.indexOf(b[0].k);len=b[0].k.length}}
@@ -203,7 +199,7 @@ b1.onclick=()=>{const s=d.querySelector('select').value,v=d.querySelector('input
 function renderHub(){const x=H(),op=x.tasks.filter(t=>!t.x).sort((a,b)=>(a.d||'').localeCompare(b.d||''));
 $('tl').innerHTML=op.length?op.map(t=>`<div class='tk' data-i='${t.id}'><b>${esc(t.u)}</b> ${esc(t.t)} <span class='note'>${fmt(t.d)}</span> <button type='button' class='sec'>Hecho</button></div>`).join(''):`<p class='note'>Sin pendientes.</p>`;
 const ms=Object.keys(x.mach).sort();
-$('ml').innerHTML=ms.length?ms.map(u=>{const m=x.mach[u],n=op.filter(t=>t.u===u||t.u===u.slice(0,3)).length;return `<div class='tk' style='border-left:5px solid ${CO[m.e]}'><b>${u}</b> · ${fmt(m.d)} · ${m.t}${n?` · ${n} pend.`:''}<select data-u='${u}'>${ES.map(s=>`<option${s===m.e?' selected':''}>${s}</option>`).join('')}</select></div>`}).join(''):`<p class='note'>Las máquinas aparecen al enviar su primer reporte.</p>`}
+$('ml').innerHTML=ms.length?ms.map(u=>{const m=x.mach[u],n=op.filter(t=>t.u===u||t.u===u.slice(0,3)).length;return `<div class='tk' style='border-left:5px solid ${CO[m.e]}'><b>${u}</b>${m.l?' (en '+m.l+')':''} · ${fmt(m.d)} · ${m.t}${n?` · ${n} pend.`:''}<select data-u='${u}'>${ES.map(s=>`<option${s===m.e?' selected':''}>${s}</option>`).join('')}</select></div>`}).join(''):`<p class='note'>Las máquinas aparecen al enviar su primer reporte.</p>`}
 $('tl').onclick=e=>{if(e.target.tagName!=='BUTTON')return;const id=e.target.parentNode.dataset.i,x=H();x.tasks.forEach(t=>{if(String(t.id)===id)t.x=1});SH(x);renderHub()};
 $('ml').onchange=e=>{const u=e.target.dataset.u;if(!u)return;const x=H();x.mach[u].e=e.target.value;SH(x);renderHub()};
 $('leer').onclick=()=>{$('ar').innerHTML='';const r=parseAviso($('av').value);r.length?r.forEach(x=>addRow(x.c,x.t,x.amb)):addRow('','');$('av').value=''};
@@ -238,6 +234,11 @@ $('sp').onclick=pull;
 window.addEventListener('online',flush);
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
 try{'serviceWorker' in navigator&&navigator.serviceWorker.register('sw.js')}catch(e){}
+function UN(){const c=$('cli').value.split('|')[0];if($('pre').checked){const o=$('orc').value.split('|')[0];return{u:o+$('uni').value,loc:c,c:o,p:1}}return{u:c+$('uni').value,loc:c,c,p:0}}
+const marca=()=>$('mar').value==='otra'?$('mod').value.trim():$('mar').value;
+$('orc').innerHTML=$('cli').innerHTML;
+$('pre').onchange=()=>{$('orw').hidden=!$('pre').checked;build()};
+$('mar').onchange=()=>{$('mod').hidden=$('mar').value!=='otra';build()};
 seg("tipo");seg("est");drawChk();build();drawHist();flush();
 $("send").onclick=async()=>{const t=build(),f=[...$("fotos").files];save();try{if(f.length&&navigator.canShare&&navigator.canShare({files:f})){await navigator.share({files:f,text:t});return}}catch(e){if(e.name==="AbortError")return}window.open("https://wa.me/?text="+encodeURIComponent(t),"_blank")};
 $("copy").onclick=async()=>{try{await navigator.clipboard.writeText(build());$("copy").textContent="Texto copiado"}catch(e){$("copy").textContent="No se pudo copiar"}setTimeout(()=>$("copy").textContent="Copiar texto",1800)};
