@@ -70,7 +70,7 @@ nav{display:flex;gap:6px;max-width:560px;margin:0 auto;padding:12px 12px 0}nav b
 <div><label for="uni">Letra de máquina</label><select id="uni"><option value="">Única</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
 </div>
 <input id="mod" placeholder="¿Cuál marca?" hidden style="margin-top:8px">
-<label for="com">Combustible</label><select id="com"><option>Gas</option><option>Gas y gasolina</option><option>Gasolina</option><option>Diésel</option></select>
+<label for="com">Combustible</label><select id="com"><option>Gas</option><option>Gas y gasolina</option><option>Diésel</option></select>
 <label>Tipo de servicio</label>
 <div class="seg" id="tipo"><button type="button" class="on">Revisión</button><button type="button">Reparación</button><button type="button">Mantenimiento</button></div>
 </section>
@@ -124,7 +124,7 @@ nav{display:flex;gap:6px;max-width:560px;margin:0 auto;padding:12px 12px 0}nav b
 </main>
 <script>
 const $=id=>document.getElementById(id);
-const items=["Frenos","Llantas","Horquillas","Mástil y cadenas","Hidráulico","Batería / motor","Luces y claxon","Dirección"];
+const items=["Frenos","Llantas","Cadenas","Hidráulico","Batería / motor","Aceite de motor","Aceite de transmisión","Luces y claxon","Dirección"];
 const st=[["✅","OK"],["⚠️","Atención"],["❌","Falla"],["➖","N/A"]];
 const state=items.map(()=>-1);
 function drawChk(){$("chk").innerHTML="";items.forEach((n,i)=>{const b=document.createElement("button");b.type="button";b.className="s"+(state[i]<0?3:state[i]);b.innerHTML="<span>"+n+"</span><span>"+(state[i]<0?"⚪":st[state[i]][0])+"</span>";b.onclick=()=>{state[i]=state[i]>=2?-1:state[i]+1;drawChk();build()};$("chk").appendChild(b)})}
@@ -211,8 +211,12 @@ const setQ=q=>{try{localStorage.setItem('rep_q',JSON.stringify(q))}catch(e){}};
 function stat(m){$('ss').textContent=m||(CFG().url?`Conectado · pendientes por enviar: ${queue().length}`:'Sin conectar (los datos viven solo en este teléfono)')}
 function push(o){if(!CFG().url)return;const q=queue();setQ(o.type==='hub'?q.filter(x=>x.type!=='hub').concat(o):q.concat(o));flush()}
 let busy=false,tmr;
-async function flush(){const g=CFG();if(busy||!g.url||!navigator.onLine)return;busy=true;
-try{while(queue().length){const o=queue()[0];try{await fetch(g.url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify({key:g.key||'',...o})})}catch(e){break}setQ(queue().slice(1))}}finally{busy=false;stat()}}
+async function flush(){const g=CFG();if(busy||!g.url||!navigator.onLine)return;busy=true;let err='';
+try{while(queue().length){const o=queue()[0],body=JSON.stringify({key:g.key||'',...o});let j=null;
+try{j=await(await fetch(g.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body})).json()}
+catch(e){try{await fetch(g.url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body});err='Enviado sin confirmación: revisa tu hoja'}catch(x){err='Sin conexión con el script';break}}
+if(j&&j.error){err=j.error==='key'?'Clave incorrecta: debe ser igual a KEY del script':'Error del script: '+j.error;break}
+setQ(queue().slice(1))}}finally{busy=false;stat(err)}}
 function qhub(){clearTimeout(tmr);tmr=setTimeout(()=>{const x=H();push({type:'hub',tasks:x.tasks,mach:x.mach})},1500)}
 async function pull(){const g=CFG();if(!g.url)return stat('Falta la URL');stat('Trayendo…');
 try{const j=await(await fetch(g.url+'?key='+encodeURIComponent(g.key||''))).json();if(j.error)return stat('Clave incorrecta');
@@ -220,7 +224,7 @@ const h=hist(),ids=new Set(h.map(x=>x.id));j.reports.forEach(x=>{if(!ids.has(x.i
 try{localStorage.setItem('rep_hist',JSON.stringify(h.slice(0,500)))}catch(e){}
 const x=H(),tm=new Map(x.tasks.map(t=>[String(t.id),t]));j.hub.tasks.forEach(t=>{const l=tm.get(String(t.id));if(!l)x.tasks.push(t);else if(t.x)l.x=1});
 x.mach=Object.assign({},j.hub.mach,x.mach);try{localStorage.setItem('rep_hub',JSON.stringify(x))}catch(e){}
-drawHist();renderHis();stat('Listo: historial y Hub al día')}catch(e){stat('No se pudo conectar')}}
+drawHist();renderHis();stat('Listo: historial y Hub al día')}catch(e){stat('No se pudo conectar: revisa que la URL termine en /exec y el acceso sea Cualquier usuario')}}
 function renderHis(){const h=hist(),cur=$('hf').value,q=nz($('hq').value);
 $('hf').innerHTML=`<option value=''>Todas las máquinas</option>`+[...new Set(h.map(r=>r.u))].sort().map(u=>`<option${u===cur?' selected':''}>${u}</option>`).join('');
 const l=h.filter(r=>(!cur||r.u===cur)&&(!q||nz(r.m||r.u).includes(q))).slice(0,60);
